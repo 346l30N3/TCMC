@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuesioner Statistik - Diagnosis TCM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .radio-group input:checked + label {
+            background-color: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
+        .fade-in { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* Style untuk loader */
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @-webkit-keyframes spinner {
+            0% { -webkit-transform: rotate(0deg); }
+            100% { -webkit-transform: rotate(360deg); }
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen py-8">
+
+    <div class="max-w-3xl mx-auto px-4">
+        <!-- Header -->
+        <div class="bg-white rounded-t-xl shadow-lg p-8 border-b-4 border-indigo-600 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Tugas Teknologi Informasi Kesehatan: Diagnosis TCM</h1>
+            <p class="text-gray-600 text-sm mb-4">Dosen Pembimbing: Adhy Prasetyo Widodo, S.Si., M.K.M</p>
+            <p class="text-gray-500 text-xs italic">
+                * Kuesioner ini dibuat untuk memenuhi tugas mata kuliah. Data diisi dengan sebenar-benarnya.
+                Kuesioner ini merupakan alat bantu diagnosis 9 jenis konsistensi tubuh menurut TCM.
+            </p>**Jawablah pertanyaan-pertanyaan berikut berdasarkan kondisi dan keadaan dalam satu tahun terakhir
+        </div>
+
+        <!-- Form Container -->
+        <form id="surveyForm" class="bg-white rounded-xl shadow-lg p-6 md:p-8 min-h-[400px] relative">
+            
+            <!-- Progress Bar -->
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+                <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <!-- Content Injection Point -->
+            <div id="stepContent" class="fade-in">
+                <!-- Javascript will render content here -->
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div class="flex justify-between mt-8 pt-4 border-t border-gray-100">
+                <button type="button" id="prevBtn" onclick="prevStep()" class="hidden px-6 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 font-medium transition">Kembali</button>
+                <button type="button" id="nextBtn" onclick="nextStep()" class="ml-auto px-6 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-medium transition">Lanjut</button>
+            </div>
+        </form>
+
+        <!-- Result Container (Hidden by default) -->
+        <div id="resultContainer" class="hidden bg-white rounded-xl shadow-lg p-8 mt-6 fade-in">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Hasil Analisis Konsistensi Tubuh</h2>
+            <div id="resultContent" class="space-y-4"></div>
+            <div class="mt-8 text-center hidden">
+                <button onclick="location.reload()" class="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900">Isi Ulang</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DATA STRUKTUR
+        const categories = [
+            {
+                id: 'demo',
+                title: 'Data Diri',
+                desc: 'Mohon lengkapi data diri Anda di bawah ini.',
+                questions: [
+                    { id: 'email', text: 'Email', type: 'text', required: true },
+                    { id: 'name', text: 'Nama Lengkap', type: 'text', required: true },
+                    { id: 'gender', text: 'Jenis Kelamin', type: 'select', options: ['Laki-Laki', 'Perempuan'], required: true },
+                    { id: 'city', text: 'Kota Domisili', type: 'text', required: true },
+                    { id: 'age', text: 'Umur', type: 'select', options: ['1-10 Tahun', '11-20 Tahun', '21-30 Tahun', '31-40 Tahun', '41-50 Tahun', '51-60 Tahun', '> 61 Tahun'], required: true },
+                    { id: 'job', text: 'Pekerjaan', type: 'select', options: ['Wirausaha', 'Karyawan', 'Mahasiswa', 'Ibu Rumah Tangga', 'Lainnya'], required: true }
+                ]
+            },
+            {
+                id: 'seimbang',
+                title: '1. Fisik Seimbang (Normal) - 平和体质',
+                desc: 'Ciri-cirinya berperawakan sedang, wajah lembab kemerahan, penuh vitalitas, ini satu-satunya konsistensi fisik orang sehat. Unsur bawaan relatif baik, fungsi organ lancar, emosi stabil. Tapi tetap harus menjaga pola hidup sehat: kerja & istirahat, olahraga teratur, dll.',
+                questions: [
+                    "Apakah anda energik?",
+                    "Apakah anda mudah lelah?",
+                    "Apakah suara anda lemah?",
+                    "Apakah anda merasa tak bahagia?",
+                    "Apakah anda tak tahan udara dingin dibanding orang lain?",
+                    "Apakah anda cepat beradaptasi dengan perubahan cuaca dan sosial?",
+                    "Apakah anda mudah kesulitan tidur?",
+                    "Apakah anda mudah lupa?"
+                ]
+            },
+            {
+                id: 'qi_def',
+                title: '2. Defisiensi Qi - 气虚体质',
+                desc: 'Ciri-cirinya adalah lesu, napas pendek, keringat spontan dll. Menurut TCM, organ paru-parunya kurang kuat berfungsi atau fungsi organ lain relatif lemah, sehingga energinya relatif rendah. Maka orang tipe ini membutuhkan tonik Qi dan penguatan limpa, daya tahan terhadap patogen; perlu menjaga kehangatan tubuh, menghindari overfatig, overpikir dan oversedih.',
+                questions: [
+                    "Apakah anda mudah lelah?",
+                    "Apakah anda mudah sesak (nafas pendek)?",
+                    "Apakah jantung anda mudah berdebar?",
+                    "Apakah anda mudah pusing atau pusing saat berdiri?",
+                    "Apakah anda mudah terserang Flu dibanding orang lain?",
+                    "Apakah anda senang sunyi, malas berbicara?",
+                    "Apakah suara anda lemah?",
+                    "Saat beraktivitas, apakah anda mudah berkeringat?"
+                ]
+            },
+            {
+                id: 'yang_def',
+                title: '3. Defisiensi Yang - 阳虚体质',
+                desc: 'Ciri-cirinya adalah produksi panas kurang, jadi tangan dan kakinya sering teraba dingin, hipotermia. Untuk perawatan dirinya perlu tonik Yang, penghangat perawat hati-ginjal, berjemur matahari, menjauhi ruangan dingin lembap. Ia harus menjaga kehangatan fisik, menghindari keringat berlebih, khususnya bagian pinggang ke bawah, untuk mencegah kebocoran Yangqi.',
+                questions: [
+                    
+                    "Apakah tangan-kaki anda dingin?",
+                    "Apakah bagian perut, punggung, pinggang, dan lutut anda takut dingin?",
+                    "Apakah anda takut dingin, memakai baju lebih banyak dibanding orang lain?",
+                    "Apakah anda tak tahan udara dingin dibanding orang lain?",
+                    "Apakah anda mudah terserang pilek dibanding orang lain?",
+                    "Apakah anda merasa tak nyaman atau takut makan minum yang dingin?",
+                    "Setelah makan minum yang dingin, apakah anda mudah diare?"
+                ]
+            },
+            {
+                id: 'yin_def',
+                title: '4. Defisiensi Yin - 阴虚体质',
+                desc: 'Ciri-cirinya adalah mulut dan tenggorok kering, telapak tangan dan kaki panas dan lain-lain tanda panas defisiensi. Krn cairan Yin kurang, maka timbul gejala kering dan mudah timbul api. Ia membutuhkan terapi pemupuk Yin pembersih panas, perawat jantung pemupuk ginjal, sambil perhatikan perawatan Qi Xue.',                
+                questions: [
+                   
+                    "Apakah telapak tangan-kaki anda merasa panas?",
+                    "Apakah muka, badan anda terasa panas?",
+                    "Apakah kulit atau bibir anda kering?",
+                    "Apakah warna bibir anda merah dibanding orang lain?",
+                    "Apakah anda mudah sembelit atau BAB keras?",
+                    "Apakah kedua pipi anda merah atau kemerah-merahan?",
+                    "Apakah mata anda terasa kering?",
+                    "Apakah mulut dan tenggorokan anda terasa kering, selalu ingin minum?"
+                ]
+            },
+            {
+                id: 'dahak',
+                title: '5. Tipe Dahak Lembap - 痰湿体质',
+                desc: 'Ciri-cirinya adalah perawakan gemuk, perut gembur, mulut lengket selaput kotor dll. Ia mudah mengalami gangguan metabolik, fungsi faal agak lemah. Ia membutuhkan penguat limpa pengering lembap, penurun keruh peluruh dahak; ekspansi paru, tonik ginjal, dan melancarkan Sanjiao, menaikkan metabolisme, mengurangi BB, pantang rokok alkohol. ',
+                questions: [
+                    "Apakah dada anda terasa sesak atau perut terasa penuh?",
+                    "Apakah badan anda terasa tidak nyaman (berat)?",
+                    "Apakah lemak perut anda banyak dan lunak?",
+                    "Apakah dahi anda terlihat lebih banyak minyak?",
+                    "Apakah kelopak mata atas anda bengkak?",
+                    "Apakah mulut anda terasa lengket?",
+                    "Apakah anda selalu banyak dahak, tenggorokan tersumbat?",
+                    "Apakah lidah anda terasa tebal dan berminyak?"
+                ]
+            },
+            {
+                id: 'lembab_panas',
+                title: '6. Tipe Lembap Panas - 湿热体质',
+                desc: 'Ciri-cirinya adalah wajah kotor berminyak kilap, mulut pahit, selaput lidah kuning kotor dll. Metabolismenya relatif tinggi tapi sampah metabolik kurang cepat dikeluarkan; maka prinsip perawatannya adalah pembersih lembap pelenyap keruh, disipasi panas pencahar api. Lingkungan dijaga kering terventilasi baik. Pola hidup baik teratur.',
+                questions: [
+                    "Apakah muka dan hidung anda terasa berminyak/mengkilap?",
+                    "Apakah anda mudah berjerawat atau timbul bisul?",
+                    "Apakah mulut anda terasa pahit/tidak enak?",
+                    "Apakah BAB anda terasa lengket/tidak tuntas?",
+                    "Apakah BAK anda terasa panas, warna pekat?",
+                    "Apakah anda keputihan kuning (wanita) / skrotum basah (pria)?"
+                ]
+            },
+            {
+                id: 'stasis_darah',
+                title: '7. Tipe Stasis Darah (Xue) - 血瘀体质',
+                desc: 'Ciri-cirinya adalah warna kulit gelap muram, otot lidah ungu gelap dll. Aliran darahnya tidak lancar, bahkan terdapat stasis Xue lokal. Prinsip perawatannya adalah mengaktifkan Xue menghalau stasis, pelancar Jingluo.',
+                questions: [
+                    "Apakah kulit anda tanpa disadari timbul memar atau perdarahan bawah kulit ?",
+                    "Apakah kedua pipi terdapat urat kapiler darah ?",
+                    "Apakah tubuh anda terdapat bagian yang nyeri ?",
+                    "Apakah kulit muka anda gelap muram/bernoda kecoklatan ?",
+                    "Apakah anda mudah timbul lingkaran hitam pada mata ?",
+                    "Apakah anda mudah lupa?",
+                    "Apakah bibir anda berwarna gelap kehitaman?"
+                ]
+            },
+            {
+                id: 'depresi_qi',
+                title: '8. Tipe Depresi Qi - 气郁体质',
+                desc: 'Ciri-cirinya adalah tampak ekspresi melankolis, cemas dan rentan. Jika menghadapi stimulasi atau tekanan mental, fungsi tubuhnya mudah terpengaruh, maka perawatan bertumpu pada pengelolaan mentalnya.',
+                questions: [
+                    "Apakah anda merasa tak bahagia?",
+                    "Apakah anda mudah tegang, gelisah?",
+                    "Apakah anda banyak cemas, melankolis?",
+                    "Apakah anda mudah ketakutan atau terkejut?",
+                    "Apakah bagian iga atau payudara anda terasa tegang sakit?",
+                    "Apakah anda menghela nafas panjang tanpa sebab?",
+                    "Apakah tenggorokan anda terasa ganjalan, tak dapat ditelan atau dimuntahkan?"
+                ]
+            },
+            {
+                id: 'atopia',
+                title: '9. Tipe Atopia (Alergi) - 特禀体质',
+                desc: 'Karena bawaan lahir tidak memadai, ia sangat peka terhadap obat, makanan, aroma, serbuk sari atau perubahan musim. Maka ia perlu selalu perhatikan perawatan jiwa-raga, menyesuaikan perubahan cuaca, menaikkan daya tahan thd penyakit, utk mengurangi gejala atau kemungkinan terkena penyakit.',
+                questions: [
+                    "Di saat tidak pilek, apakah anda bisa bersin-bersin?",
+                    "Di saat tidak sedang pilek apakah hidung anda bisa tersumbat, keluar ingus?",
+                    "Karena perubahan musim, perubahan suhu atau bau aneh apakah anda timbul batuk sesak?",
+                    "Apakah anda mudah alergi (obat,makanan,bau,pollen,saat perubahan musim) ?",
+                    "Apakah kulit anda mudah timbul biduran (gatal,merah,menebal)?",
+                    "Karena alergi apakah anda timbul purpura (bercak atau bintik merah kebiruan di kulit)?",
+                    "Apakah kulit anda bila digaruk langsung merah, muncul bekas goresan?"
+                ]
+            }
+        ];
+
+        // STATE APLIKASI
+        let currentStep = 0;
+        let answers = {};
+        let finalResults = []; // Menyimpan hasil perhitungan skor
+
+        // --- GEMINI API CONFIGURATION ---
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
+        const apiKey = ""; // Canvas will inject key
+        // --- END GEMINI API CONFIGURATION ---
+
+        // INIT
+        document.addEventListener('DOMContentLoaded', () => {
+            renderStep();
+        });
+        
+        // Helper function to convert simple Markdown to HTML for display
+        function convertMarkdownToHtml(markdown) {
+            let html = markdown.replace(/###\s*(.*)/g, '<h4 class="text-lg font-semibold mt-4 mb-2 text-indigo-700">$1</h4>');
+            html = html.replace(/##\s*(.*)/g, '<h3 class="text-xl font-bold mt-6 mb-3 text-indigo-800 border-b pb-1">$1</h3>');
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); 
+            
+            // Handle lists (simple, assuming single-level list)
+            html = html.replace(/\n\*\s*(.*)/g, '<li>$1</li>');
+            if (html.includes('<li>')) {
+                html = '<ul>' + html + '</ul>';
+                // Clean up any extra list tags if present
+                html = html.replace(/<\/ul><ul>/g, '');
+            }
+            
+            // Handle simple paragraphs
+            html = html.replace(/(\n\n)/g, '</p><p class="mb-4">');
+            html = '<p class="mb-4">' + html + '</p>';
+            
+            // Clean up empty paragraphs/list tags from conversion
+            html = html.replace(/<p class="mb-4"><\/p>/g, '').replace(/<ul><p class="mb-4">/g, '<ul>').replace(/<\/p><\/ul>/g, '</ul>');
+            
+            return html;
+        }
+
+        // Helper function for API call with backoff (For Gemini Integration)
+        async function callGemini(prompt, systemInstruction, maxRetries = 5) {
+            const url = API_URL + apiKey;
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+            };
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 429 && attempt < maxRetries - 1) {
+                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, Gemini gagal memberikan rekomendasi.";
+                    return text;
+
+                } catch (error) {
+                    if (attempt < maxRetries - 1) {
+                        const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        continue;
+                    }
+                    console.error("Gemini API call failed after multiple retries:", error);
+                    throw new Error("Terjadi kesalahan saat menghubungi server AI.");
+                }
+            }
+            throw new Error("Terjadi kesalahan yang tidak terduga.");
+        }
+
+        // New function to generate recommendations using Gemini AI
+        async function generateRecommendation() {
+            const recOutput = document.getElementById('recommendationOutput');
+            const recButton = document.getElementById('generateRecBtn');
+            
+            // 1. Dapatkan tipe tubuh teratas (skor > 40% dianggap signifikan, atau yang tertinggi jika semua rendah)
+            let topTypes = finalResults.filter(r => r.id !== 'seimbang' && r.finalScore >= 40);
+
+            // Jika Seimbang dominan (>60%) dan tipe patologis rendah (<40%), fokus pada seimbang.
+            const seimbang = finalResults.find(r => r.id === 'seimbang');
+            if (seimbang && seimbang.finalScore >= 60 && topTypes.length === 0) {
+                topTypes.push(seimbang);
+            }
+            
+            // Jika masih kosong (semua skor rendah), ambil tipe patologis tertinggi
+            if (topTypes.length === 0 && finalResults.length > 1) {
+                const sortedPatologis = finalResults.filter(r => r.id !== 'seimbang').sort((a, b) => b.finalScore - a.finalScore);
+                if (sortedPatologis.length > 0 && sortedPatologis[0].finalScore >= 20) {
+                     topTypes.push(sortedPatologis[0]);
+                }
+            }
+
+            if (topTypes.length === 0) {
+                recOutput.innerHTML = '<p class="text-red-500 text-center">Tidak ada kecenderungan tipe patologis yang signifikan (skor di bawah 20%). Lanjutkan menjaga pola hidup sehat!</p>';
+                return;
+            }
+
+            const typesString = topTypes.map(t => `${t.title.split('-')[1].trim()} (${t.finalScore}%)`).join(' dan ');
+            
+            recButton.disabled = true;
+            recButton.innerHTML = '<svg class="loader inline w-5 h-5 mr-3 border-4 border-t-white border-green-200 rounded-full" viewBox="0 0 24 24"></svg>Membuat Rekomendasi...';
+            recOutput.innerHTML = '';
+            
+            const systemPrompt = "Anda adalah Ahli Kesehatan Tradisional China (TCM) dan nutrisi. Tugas Anda adalah memberikan rekomendasi yang terstruktur dan mudah dipahami dalam bahasa Indonesia, berfokus pada pencegahan dan peningkatan kesehatan. Selalu berikan 4 bagian: 1. Penjelasan Singkat Tipe, 2. Rekomendasi Diet/Nutrisi, 3. Rekomendasi Gaya Hidup/Latihan, dan 4. Rekomendasi Herbal/Bumbu Dapur (yang mudah ditemukan). Format output harus menggunakan heading Markdown (## dan ###).";
+
+            const userPrompt = `Berdasarkan hasil kuesioner, klien memiliki kecenderungan utama sebagai berikut: ${typesString}. Berikan rekomendasi kesehatan yang terperinci dan disesuaikan dengan tipe tubuh TCM ini.`;
+
+            try {
+                const recommendation = await callGemini(userPrompt, systemPrompt);
+                recOutput.innerHTML = `
+                    <div class="mt-6 p-6 bg-white border border-green-200 rounded-lg shadow-xl">
+                        <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Rekomendasi Kesehatan Gemini AI ✨</h3>
+                        <div class="text-gray-700 text-sm leading-relaxed space-y-3">${convertMarkdownToHtml(recommendation)}</div>
+                    </div>
+                `;
+            } catch (error) {
+                recOutput.innerHTML = `<p class="text-red-500 text-center">Gagal mendapatkan rekomendasi: ${error.message}</p>`;
+            } finally {
+                recButton.disabled = false;
+                recButton.innerHTML = 'Dapatkan Rekomendasi Kesehatan AI ✨';
+            }
+        }
+
+
+        // FUNGSI RENDER
+        function renderStep() {
+            const container = document.getElementById('stepContent');
+            const data = categories[currentStep];
+            
+            // Update Progress Bar
+            const progress = ((currentStep) / categories.length) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+
+            // Button State
+            document.getElementById('prevBtn').classList.toggle('hidden', currentStep === 0);
+            document.getElementById('nextBtn').textContent = currentStep === categories.length - 1 ? 'Selesai & Hitung' : 'Lanjut';
+
+            // HTML Builder
+            let html = `
+                <h2 class="text-xl font-bold text-indigo-700 mb-2">${data.title}</h2>
+                <p class="text-gray-600 mb-6 border-l-4 border-indigo-200 pl-4 py-2 bg-gray-50">${data.desc}</p>
+                <div class="space-y-6">
+            `;
+
+            if (data.id === 'demo') {
+                // Render Input Text/Select untuk Data Diri
+                data.questions.forEach((q, index) => {
+                    html += `<div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">${q.text} <span class="text-red-500">*</span></label>`;
+                    
+                    if (q.type === 'select') {
+                        html += `<select id="${q.id}" class="w-full border-gray-300 rounded-md shadow-sm border p-2 focus:ring-indigo-500 focus:border-indigo-500" onchange="saveDemo('${q.id}', this.value)">
+                            <option value="">Pilih...</option>
+                            ${q.options.map(opt => `<option value="${opt}" ${answers[q.id] === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+                        </select>`;
+                    } else {
+                        html += `<input type="text" id="${q.id}" class="w-full border-gray-300 rounded-md shadow-sm border p-2 focus:ring-indigo-500 focus:border-indigo-500" value="${answers[q.id] || ''}" onchange="saveDemo('${q.id}', this.value)">`;
+                    }
+                    html += `</div>`;
+                });
+            } else {
+                // Render Soal Likert Scale 1-5
+                data.questions.forEach((q, index) => {
+                    const key = `${data.id}_${index}`;
+                    const val = answers[key];
+                    
+                    html += `
+                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <p class="font-medium text-gray-800 mb-3">${index + 1}. ${q} <span class="text-red-500">*</span></p>
+                            <div class="flex flex-wrap justify-between items-center gap-2">
+                                <span class="text-xs text-gray-500 w-full sm:w-auto mb-2 sm:mb-0">Tidak Terasa</span>
+                                <div class="flex gap-2 radio-group">
+                                    ${[1, 2, 3, 4, 5].map(num => `
+                                        <div>
+                                            <input type="radio" name="${key}" id="${key}_${num}" value="${num}" class="hidden" ${val == num ? 'checked' : ''} onchange="saveAnswer('${key}', ${num})">
+                                            <label for="${key}_${num}" class="cursor-pointer w-10 h-10 flex items-center justify-center rounded-full border border-gray-300 bg-white hover:bg-indigo-50 transition-colors font-bold text-sm">
+                                                ${num}
+                                            </label>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <span class="text-xs text-gray-500 w-full sm:w-auto mt-2 sm:mt-0 text-right">Selalu Terasa</span>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `</div>`;
+            container.innerHTML = html;
+            
+            // Scroll to top of form
+            document.getElementById('surveyForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // LOGIKA PENYIMPANAN
+        function saveDemo(id, value) {
+            answers[id] = value;
+        }
+
+        function saveAnswer(key, value) {
+            answers[key] = value;
+        }
+
+        // NAVIGASI
+        function nextStep() {
+            if (!validateCurrentStep()) return;
+
+            if (currentStep < categories.length - 1) {
+                currentStep++;
+                renderStep();
+            } else {
+                calculateResults();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 0) {
+                currentStep--;
+                renderStep();
+            }
+        }
+
+        // VALIDASI
+        function validateCurrentStep() {
+            const data = categories[currentStep];
+            if (data.id === 'demo') {
+                for (let q of data.questions) {
+                    if (!answers[q.id]) {
+                        alert(`Mohon isi ${q.text}`);
+                        return false;
+                    }
+                }
+            } else {
+                for (let i = 0; i < data.questions.length; i++) {
+                    if (!answers[`${data.id}_${i}`]) {
+                        alert(`Mohon lengkapi pertanyaan nomor ${i + 1}`);
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        // PERHITUNGAN HASIL (INTI LOGIKA)
+        function calculateResults() {
+            document.getElementById('surveyForm').classList.add('hidden');
+            document.getElementById('resultContainer').classList.remove('hidden');
+
+            finalResults = []; // Reset results array
+            let htmlTable = '';
+
+            // Loop skip index 0 (demo)
+            for (let i = 1; i < categories.length; i++) {
+                const cat = categories[i];
+                let rawScore = 0;
+                let questionCount = cat.questions.length;
+
+                // Sum raw score
+                for (let j = 0; j < questionCount; j++) {
+                    if (answers[`${cat.id}_${j}`]) {
+                        rawScore += parseInt(answers[`${cat.id}_${j}`]);
+                    }
+                }
+
+                // Rumus: ((skor mentah - jumlah soal) : (4 x jumlah soal)) x 100%
+                let finalScore = ((rawScore - questionCount) / (4 * questionCount)) * 100;
+                finalScore = finalScore.toFixed(2);
+
+                // Logika Status Sederhana 
+                let status = "";
+                let statusColor = "";
+
+                if (cat.id === 'seimbang') {
+                    if (finalScore >= 60) { status = "Dominan (Baik)"; statusColor = "text-green-600 font-bold"; }
+                    else { status = "Kurang Seimbang"; statusColor = "text-yellow-600"; }
+                } else {
+                    if (finalScore >= 40) { status = "Kecenderungan Tinggi"; statusColor = "text-red-600 font-bold"; }
+                    else if (finalScore >= 30) { status = "Kecenderungan Sedang"; statusColor = "text-orange-500"; }
+                    else { status = "Cukup Sehat"; statusColor = "text-gray-500"; }
+                }
+
+                // Store result
+                finalResults.push({
+                    id: cat.id,
+                    title: cat.title,
+                    finalScore: parseFloat(finalScore)
+                });
+
+
+                htmlTable += `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 text-sm font-medium">${cat.title.split('-')[1] || cat.title}</td>
+                        <td class="p-3 text-center font-mono text-indigo-700">${finalScore}%</td>
+                        <td class="p-3 text-right text-sm ${statusColor}">${status}</td>
+                    </tr>
+                `;
+            }
+
+            // BUILD FINAL RESULT HTML
+            let htmlResult = `
+                <div class="bg-blue-50 p-4 rounded-lg mb-4 text-sm">
+                    <strong>Informasi Responden:</strong><br>
+                    Nama: ${answers.name}<br>
+                    Umur: ${answers.age}<br>
+                    Pekerjaan: ${answers.job}
+                </div>
+                <table class="w-full text-left border-collapse mb-8">
+                    <thead>
+                        <tr class="bg-gray-100 border-b">
+                            <th class="p-3 font-semibold text-gray-700">Tipe Fisik</th>
+                            <th class="p-3 font-semibold text-gray-700 text-center">Skor (%)</th>
+                            <th class="p-3 font-semibold text-gray-700 text-right">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    ${htmlTable}
+                    </tbody>
+                </table>
+                
+                <div class="mt-4 text-center">
+                    <button id="generateRecBtn" onclick="generateRecommendation()" 
+                            class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-lg text-white bg-green-600 hover:bg-green-700 transition duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed">
+                        Dapatkan Rekomendasi Kesehatan AI ✨
+                    </button>
+                </div>
+                
+                <!-- Output area for AI recommendation -->
+                <div id="recommendationOutput" class="mt-6">
+                    <p class="text-sm text-gray-500 text-center italic">Klik tombol di atas untuk mendapatkan saran gaya hidup, diet, dan herbal dari Gemini AI berdasarkan hasil diagnosis TCM Anda.</p>
+                </div>
+
+                <div class="mt-8 text-xs text-gray-500 bg-gray-100 p-3 rounded">
+                    <strong>Catatan Cara Baca Skor:</strong><br>
+                    1. <b>Fisik Seimbang:</b> Semakin tinggi skor, semakin sehat/seimbang kondisi tubuh.<br>
+                    2. <b>Tipe Lainnya (Defisiensi/Patologis):</b> Semakin tinggi skor, semakin besar indikasi ketidakseimbangan pada tipe tersebut.
+                </div>
+            `;
+
+            document.getElementById('resultContent').innerHTML = htmlResult;
+        }
+    </script>
+</body>
+</html>
