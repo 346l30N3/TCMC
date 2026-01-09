@@ -28,6 +28,37 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        /* --- PRINT STYLES (Untuk PDF) --- */
+        @media print {
+            /* Pastikan latar belakang putih dan tidak ada bayangan pada output cetak */
+            body { background-color: white !important; padding: 0; }
+            .max-w-3xl { max-width: 100%; margin: 0; }
+            /* Sembunyikan semua elemen yang tidak perlu dicetak */
+            #surveyForm, #resultControls, #generateRecBtn, .text-xs.italic, .bg-blue-50 {
+                display: none !important;
+            }
+            /* Pastikan header dan container hasil terlihat bersih */
+            .bg-white.rounded-t-xl, #resultContainer {
+                box-shadow: none !important;
+                border: none !important;
+                padding: 0 !important;
+            }
+            .bg-white.rounded-t-xl {
+                display: block !important;
+                border-bottom: 1px solid #ccc !important;
+                margin-bottom: 1rem !important;
+            }
+            #resultContainer {
+                display: block !important;
+            }
+            /* Hapus padding dan margin berlebih dari konten hasil AI */
+            #recommendationOutput div.mt-6 {
+                box-shadow: none !important;
+                padding: 0 !important;
+                border: none !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen py-8">
@@ -40,7 +71,7 @@
             <p class="text-gray-500 text-xs italic">
                 * Kuesioner ini dibuat untuk memenuhi tugas mata kuliah. Data diisi dengan sebenar-benarnya.
                 Kuesioner ini merupakan alat bantu diagnosis 9 jenis konsistensi tubuh menurut TCM.
-            </p>**Jawablah pertanyaan-pertanyaan berikut berdasarkan kondisi dan keadaan dalam satu tahun terakhir
+            </p>
         </div>
 
         <!-- Form Container -->
@@ -67,14 +98,22 @@
         <div id="resultContainer" class="hidden bg-white rounded-xl shadow-lg p-8 mt-6 fade-in">
             <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Hasil Analisis Konsistensi Tubuh</h2>
             <div id="resultContent" class="space-y-4"></div>
-            <div class="mt-8 text-center hidden">
-                <button onclick="location.reload()" class="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900">Isi Ulang</button>
+            
+            <!-- Control Buttons: Cetak & Isi Ulang -->
+            <div id="resultControls" class="mt-8 flex justify-center space-x-4 print:hidden">
+                <button onclick="window.print()" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center transition duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v6a2 2 0 002 2h12a2 2 0 002-2v-6a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm4 9V8h2v5h-2z" clip-rule="evenodd" />
+                    </svg>
+                    Cetak Hasil (PDF)
+                </button>
+                <button onclick="location.reload()" class="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium transition duration-300">Isi Ulang Kuesioner</button>
             </div>
         </div>
     </div>
 
     <script>
-        // DATA STRUKTUR
+        // DATA STRUKTUR (Tidak Berubah)
         const categories = [
             {
                 id: 'demo',
@@ -343,8 +382,8 @@
             try {
                 const recommendation = await callGemini(userPrompt, systemPrompt);
                 recOutput.innerHTML = `
-                    <div class="mt-6 p-6 bg-white border border-green-200 rounded-lg shadow-xl">
-                        <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2">Rekomendasi Kesehatan Gemini AI ✨</h3>
+                    <div class="mt-6 p-6 bg-white border border-green-200 rounded-lg shadow-xl print:border-none print:shadow-none">
+                        <h3 class="text-xl font-bold text-green-700 mb-4 border-b pb-2 print:border-b-0">Rekomendasi Kesehatan Gemini AI ✨</h3>
                         <div class="text-gray-700 text-sm leading-relaxed space-y-3">${convertMarkdownToHtml(recommendation)}</div>
                     </div>
                 `;
@@ -534,7 +573,7 @@
 
             // BUILD FINAL RESULT HTML
             let htmlResult = `
-                <div class="bg-blue-50 p-4 rounded-lg mb-4 text-sm">
+                <div class="bg-blue-50 p-4 rounded-lg mb-4 text-sm print:hidden">
                     <strong>Informasi Responden:</strong><br>
                     Nama: ${answers.name}<br>
                     Umur: ${answers.age}<br>
@@ -553,7 +592,7 @@
                     </tbody>
                 </table>
                 
-                <div class="mt-4 text-center">
+                <div class="mt-4 text-center print:hidden">
                     <button id="generateRecBtn" onclick="generateRecommendation()" 
                             class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-lg text-white bg-green-600 hover:bg-green-700 transition duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed">
                         Dapatkan Rekomendasi Kesehatan AI ✨
@@ -562,13 +601,24 @@
                 
                 <!-- Output area for AI recommendation -->
                 <div id="recommendationOutput" class="mt-6">
-                    <p class="text-sm text-gray-500 text-center italic">Klik tombol di atas untuk mendapatkan saran gaya hidup, diet, dan herbal dari Gemini AI berdasarkan hasil diagnosis TCM Anda.</p>
+                    <p class="text-sm text-gray-500 text-center italic print:hidden">Klik tombol di atas untuk mendapatkan saran gaya hidup, diet, dan herbal dari Gemini AI berdasarkan hasil diagnosis TCM Anda.</p>
                 </div>
 
-                <div class="mt-8 text-xs text-gray-500 bg-gray-100 p-3 rounded">
+                <div class="mt-8 text-xs text-gray-500 bg-gray-100 p-3 rounded print:hidden">
                     <strong>Catatan Cara Baca Skor:</strong><br>
                     1. <b>Fisik Seimbang:</b> Semakin tinggi skor, semakin sehat/seimbang kondisi tubuh.<br>
                     2. <b>Tipe Lainnya (Defisiensi/Patologis):</b> Semakin tinggi skor, semakin besar indikasi ketidakseimbangan pada tipe tersebut.
+                </div>
+
+                <!-- Footer Credit -->
+                <div class="mt-4 text-xs text-center text-gray-500 p-3 border-t border-gray-200">
+                    <p>
+                        Dibuat oleh Tim Dosen dan Asisten<br>
+                        Credited to:<br>
+                        Created by : Jolanda Sakul ( NIM  : 20230302120523 )
+                        Penerjemah & penyadur TCMC : dr Willie Japaries, MARS<br>
+                        Supported by: JAEN
+                    </p>
                 </div>
             `;
 
