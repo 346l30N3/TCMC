@@ -35,7 +35,7 @@
             body { background-color: white !important; padding: 0; }
             .max-w-3xl { max-width: 100%; margin: 0; }
             /* Sembunyikan semua elemen yang tidak perlu dicetak */
-            #surveyForm, #resultControls, #generateRecBtn, .text-xs.italic, .bg-blue-50 {
+            #surveyForm, #resultControls, #generateRecBtn, #generatePlanBtn, .text-xs.italic, .bg-blue-50, #saveStatus, .text-sm.text-gray-500.text-center.italic {
                 display: none !important;
             }
             /* Pastikan header dan container hasil terlihat bersih */
@@ -53,10 +53,23 @@
                 display: block !important;
             }
             /* Hapus padding dan margin berlebih dari konten hasil AI */
-            #recommendationOutput div.mt-6 {
+            #recommendationOutput div.mt-6, #weeklyPlanOutput div.mt-8 {
                 box-shadow: none !important;
                 padding: 0 !important;
                 border: none !important;
+            }
+            /* Styling untuk tabel Markdown agar tercetak dengan baik */
+            #weeklyPlanOutput table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            #weeklyPlanOutput th, #weeklyPlanOutput td {
+                border: 1px solid #ccc;
+                padding: 8px;
+                text-align: left;
+            }
+            #weeklyPlanOutput th {
+                background-color: #f2f2f2;
             }
         }
     </style>
@@ -84,7 +97,7 @@
 
             <!-- Content Injection Point -->
             <div id="stepContent" class="fade-in">
-                <!-- Javascript will render content here -->
+                <!-- Javascript akan merender konten di sini -->
             </div>
 
             <!-- Navigation Buttons -->
@@ -112,7 +125,12 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        // Impor modul Firebase yang diperlukan
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         // DATA STRUKTUR (Tidak Berubah)
         const categories = [
             {
@@ -254,7 +272,7 @@
                     "Di saat tidak sedang pilek apakah hidung anda bisa tersumbat, keluar ingus?",
                     "Karena perubahan musim, perubahan suhu atau bau aneh apakah anda timbul batuk sesak?",
                     "Apakah anda mudah alergi (obat,makanan,bau,pollen,saat perubahan musim) ?",
-                    "Apakah kulit anda mudah timbul biduran (gatal,merah,menebal)?",
+                    "Apakah kulit anda mudah timbur biduran (gatal,merah,menebal)?",
                     "Karena alergi apakah anda timbul purpura (bercak atau bintik merah kebiruan di kulit)?",
                     "Apakah kulit anda bila digaruk langsung merah, muncul bekas goresan?"
                 ]
@@ -268,34 +286,92 @@
 
         // --- GEMINI API CONFIGURATION ---
         const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
-        const apiKey = ""; // Canvas will inject key
+        const apiKey = ""; // Canvas akan memasukkan kunci API di sini
         // --- END GEMINI API CONFIGURATION ---
 
+        // --- FIREBASE CONFIGURATION & INITIALIZATION ---
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isFirebaseReady = false;
+        
+        // Global variables from Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-tcm-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        async function setupFirebase() {
+            if (isFirebaseReady || !firebaseConfig) return;
+
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Sign in logic
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Wait for auth state to be established
+                await new Promise(resolve => {
+                    const unsubscribe = onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            userId = user.uid;
+                        } else {
+                            // Fallback ke anonymous ID jika auth gagal
+                            userId = crypto.randomUUID(); 
+                        }
+                        isFirebaseReady = true;
+                        unsubscribe();
+                        resolve();
+                    });
+                });
+                
+                console.log(`[Firestore] Initialized. User ID: ${userId}`);
+
+            } catch (error) {
+                console.error("[Firestore] Initialization failed:", error);
+            }
+        }
+        
         // INIT
         document.addEventListener('DOMContentLoaded', () => {
+            setupFirebase();
             renderStep();
         });
         
         // Helper function to convert simple Markdown to HTML for display
         function convertMarkdownToHtml(markdown) {
+            // Simple replacement for common elements. This is NOT a full Markdown parser.
             let html = markdown.replace(/###\s*(.*)/g, '<h4 class="text-lg font-semibold mt-4 mb-2 text-indigo-700">$1</h4>');
             html = html.replace(/##\s*(.*)/g, '<h3 class="text-xl font-bold mt-6 mb-3 text-indigo-800 border-b pb-1">$1</h3>');
             html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); 
             
-            // Handle lists (simple, assuming single-level list)
-            html = html.replace(/\n\*\s*(.*)/g, '<li>$1</li>');
-            if (html.includes('<li>')) {
-                html = '<ul>' + html + '</ul>';
-                // Clean up any extra list tags if present
-                html = html.replace(/<\/ul><ul>/g, '');
+            // Convert list items
+            const listItems = html.split('\n').filter(line => line.trim().startsWith('* '));
+            if (listItems.length > 0) {
+                let listHtml = '<ul>';
+                for (const item of listItems) {
+                    listHtml += `<li class="ml-5 list-disc">${item.substring(2).trim()}</li>`;
+                }
+                listHtml += '</ul>';
+                
+                // Replace original list markdown with HTML list, preserving surrounding text
+                html = html.replace(/\n\*\s*.*(\n|$)/g, '').trim(); // Remove raw list items
+                html += listHtml; // Append list
             }
             
             // Handle simple paragraphs
-            html = html.replace(/(\n\n)/g, '</p><p class="mb-4">');
-            html = '<p class="mb-4">' + html + '</p>';
-            
-            // Clean up empty paragraphs/list tags from conversion
-            html = html.replace(/<p class="mb-4"><\/p>/g, '').replace(/<ul><p class="mb-4">/g, '<ul>').replace(/<\/p><\/ul>/g, '</ul>');
+            html = html.split('\n\n').map(p => {
+                if (p.trim() && !p.trim().startsWith('<h') && !p.trim().startsWith('<ul') && !p.trim().startsWith('|')) {
+                    return `<p class="mb-4">${p.trim()}</p>`;
+                }
+                return p;
+            }).join('');
             
             return html;
         }
@@ -326,7 +402,7 @@
                     }
 
                     const result = await response.json();
-                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, Gemini gagal memberikan rekomendasi.";
+                    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, Gemini gagal memberikan output.";
                     return text;
 
                 } catch (error) {
@@ -342,21 +418,21 @@
             throw new Error("Terjadi kesalahan yang tidak terduga.");
         }
 
-        // New function to generate recommendations using Gemini AI
+        // --- FITUR GEMINI 1: GENERATE REKOMENDASI UMUM ---
         async function generateRecommendation() {
             const recOutput = document.getElementById('recommendationOutput');
             const recButton = document.getElementById('generateRecBtn');
             
-            // 1. Dapatkan tipe tubuh teratas (skor > 40% dianggap signifikan, atau yang tertinggi jika semua rendah)
+            // Dapatkan tipe tubuh teratas (skor > 40% dianggap signifikan, atau yang tertinggi jika semua rendah)
             let topTypes = finalResults.filter(r => r.id !== 'seimbang' && r.finalScore >= 40);
 
-            // Jika Seimbang dominan (>60%) dan tipe patologis rendah (<40%), fokus pada seimbang.
+            // Tambahkan Seimbang jika dominan
             const seimbang = finalResults.find(r => r.id === 'seimbang');
             if (seimbang && seimbang.finalScore >= 60 && topTypes.length === 0) {
                 topTypes.push(seimbang);
             }
             
-            // Jika masih kosong (semua skor rendah), ambil tipe patologis tertinggi
+            // Jika masih kosong, ambil tipe patologis tertinggi
             if (topTypes.length === 0 && finalResults.length > 1) {
                 const sortedPatologis = finalResults.filter(r => r.id !== 'seimbang').sort((a, b) => b.finalScore - a.finalScore);
                 if (sortedPatologis.length > 0 && sortedPatologis[0].finalScore >= 20) {
@@ -375,7 +451,7 @@
             recButton.innerHTML = '<svg class="loader inline w-5 h-5 mr-3 border-4 border-t-white border-green-200 rounded-full" viewBox="0 0 24 24"></svg>Membuat Rekomendasi...';
             recOutput.innerHTML = '';
             
-            const systemPrompt = "Anda adalah Ahli Kesehatan Tradisional China (TCM) dan nutrisi. Tugas Anda adalah memberikan rekomendasi yang terstruktur dan mudah dipahami dalam bahasa Indonesia, berfokus pada pencegahan dan peningkatan kesehatan. Selalu berikan 4 bagian: 1. Penjelasan Singkat Tipe, 2. Rekomendasi Diet/Nutrisi, 3. Rekomendasi Gaya Hidup/Latihan, dan 4. Rekomendasi Herbal/Bumbu Dapur (yang mudah ditemukan). Format output harus menggunakan heading Markdown (## dan ###).";
+            const systemPrompt = "Anda adalah Ahli Kesehatan Tradisional China (TCM) dan nutrisi. Tugas Anda adalah memberikan rekomendasi yang terstruktur dan mudah dipahami dalam bahasa Indonesia, berfokus pada pencegahan dan peningkatan kesehatan. Selalu berikan 4 bagian: 1. Penjelasan Singkat Tipe, 2. Rekomendasi Diet/Nutrisi, 3. Rekomendasi Gaya Hidup/Latihan, dan 4. Rekomendasi Herbal/Bumbu Dapur (yang mudah ditemukan). Format output harus menggunakan heading Markdown (## dan ###) dan bullet points (*).";
 
             const userPrompt = `Berdasarkan hasil kuesioner, klien memiliki kecenderungan utama sebagai berikut: ${typesString}. Berikan rekomendasi kesehatan yang terperinci dan disesuaikan dengan tipe tubuh TCM ini.`;
 
@@ -392,6 +468,60 @@
             } finally {
                 recButton.disabled = false;
                 recButton.innerHTML = 'Dapatkan Rekomendasi Kesehatan AI ✨';
+            }
+        }
+        
+        // --- FITUR GEMINI 2: GENERATE RENCANA MINGGUAN ---
+        async function generateWeeklyPlan() {
+            const planOutput = document.getElementById('weeklyPlanOutput');
+            const planButton = document.getElementById('generatePlanBtn');
+
+            // 1. Dapatkan tipe tubuh teratas (skor > 35% dianggap signifikan)
+            let topTypes = finalResults.filter(r => r.id !== 'seimbang' && r.finalScore >= 35);
+            const seimbang = finalResults.find(r => r.id === 'seimbang');
+            
+            if (seimbang && seimbang.finalScore >= 60 && topTypes.length === 0) {
+                topTypes.push(seimbang);
+            }
+
+            if (topTypes.length === 0) {
+                planOutput.innerHTML = '<p class="text-red-500 text-center">Tidak ada tipe yang cukup signifikan (skor di bawah 35%) untuk membuat rencana mingguan mendetail. Fokus pada hasil Rekomendasi Umum.</p>';
+                return;
+            }
+
+            const userDetails = `Nama: ${answers.name}, Umur: ${answers.age}, Pekerjaan: ${answers.job}, Kota: ${answers.city}.`;
+            const typesString = topTypes.map(t => `${t.title.split('-')[1].trim()} (${t.finalScore}%)`).join(' dan ');
+
+            planButton.disabled = true;
+            planButton.innerHTML = '<svg class="loader inline w-5 h-5 mr-3 border-4 border-t-white border-blue-200 rounded-full" viewBox="0 0 24 24"></svg>Menyusun Rencana Mingguan...';
+            planOutput.innerHTML = '';
+
+            const systemPrompt = `Anda adalah seorang ahli wellness dan pelatih gaya hidup yang berfokus pada kesehatan Tiongkok Tradisional (TCM). Tugas Anda adalah membuat rencana kesehatan mingguan yang terstruktur dalam format Markdown Table. Rencana ini harus mencakup 7 hari dan memiliki kolom: 'Hari', 'Fokus Diet (Makanan/Teh)', 'Aktivitas (Latihan/Jingluo)', dan 'Keseimbangan Emosi'. Sesuaikan rencana ini secara spesifik untuk mengatasi tipe tubuh TCM yang diberikan dan mempertimbangkan demografi pengguna. JANGAN berikan penjelasan di luar tabel.`;
+
+            const userPrompt = `Buatkan saya rencana wellness mingguan (7 hari) yang disesuaikan berdasarkan tipe tubuh TCM saya: ${typesString}. Pertimbangkan juga informasi dasar saya: ${userDetails}. Format sebagai tabel Markdown.`;
+
+            try {
+                const plan = await callGemini(userPrompt, systemPrompt);
+                
+                // Tambahkan kelas CSS untuk styling tabel sederhana
+                const tableHtml = plan.replace(/\|/g, '<span class="px-2">|</span>');
+
+                planOutput.innerHTML = `
+                    <div class="mt-8 p-6 bg-white border border-blue-200 rounded-lg shadow-xl print:border-none print:shadow-none">
+                        <h3 class="text-xl font-bold text-blue-700 mb-4 border-b pb-2 print:border-b-0">Rencana Wellness Mingguan yang Dipersonalisasi ✨</h3>
+                        <p class="text-sm text-gray-600 mb-4">Rencana 7 hari yang dirancang oleh AI untuk mendukung jenis konsistensi tubuh Anda.</p>
+                        <div class="text-gray-700 text-sm leading-relaxed overflow-x-auto">
+                            <!-- Raw Markdown table output, relying on general browser/Tailwind styling -->
+                            <pre class="whitespace-pre-wrap font-sans text-xs sm:text-sm p-2 bg-gray-50 border rounded">${plan}</pre>
+                            <p class="text-xs text-gray-400 mt-2">Untuk tampilan tabel yang lebih rapi, silakan Cetak (PDF) hasilnya.</p>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                planOutput.innerHTML = `<p class="text-red-500 text-center">Gagal mendapatkan rencana mingguan: ${error.message}</p>`;
+            } finally {
+                planButton.disabled = false;
+                planButton.innerHTML = 'Dapatkan Rencana Wellness Mingguan ✨';
             }
         }
 
@@ -463,7 +593,7 @@
             html += `</div>`;
             container.innerHTML = html;
             
-            // Scroll to top of form
+            // Scroll ke bagian atas formulir
             document.getElementById('surveyForm').scrollIntoView({ behavior: 'smooth' });
         }
 
@@ -500,20 +630,61 @@
             const data = categories[currentStep];
             if (data.id === 'demo') {
                 for (let q of data.questions) {
-                    if (!answers[q.id]) {
-                        alert(`Mohon isi ${q.text}`);
+                    if (!answers[q.id] || answers[q.id].trim() === '') {
+                        // Menggunakan alert sederhana karena modal kustom tidak diimplementasikan.
+                        alert(`Mohon isi ${q.text}`); 
                         return false;
                     }
                 }
             } else {
                 for (let i = 0; i < data.questions.length; i++) {
                     if (!answers[`${data.id}_${i}`]) {
-                        alert(`Mohon lengkapi pertanyaan nomor ${i + 1}`);
+                        // Menggunakan alert sederhana karena modal kustom tidak diimplementasikan.
+                        alert(`Mohon lengkapi pertanyaan nomor ${i + 1}`); 
                         return false;
                     }
                 }
             }
             return true;
+        }
+
+        // FIREBASE SAVE FUNCTION
+        async function saveResultsToFirestore(data) {
+            const saveStatusElement = document.getElementById('saveStatus');
+            
+            // Cek apakah Firebase siap
+            if (!isFirebaseReady || !userId) {
+                saveStatusElement.className = 'mt-4 text-center text-sm font-medium text-red-500';
+                saveStatusElement.textContent = '❌ Penyimpanan data gagal: Firebase belum siap atau konfigurasi kurang.';
+                return;
+            }
+
+            try {
+                saveStatusElement.className = 'mt-4 text-center text-sm font-medium text-blue-500';
+                saveStatusElement.textContent = 'Menyimpan hasil kuesioner...';
+                
+                // Path: /artifacts/{appId}/users/{userId}/tcm_results
+                const path = `artifacts/${appId}/users/${userId}/tcm_results`;
+                const colRef = collection(db, path);
+                
+                const dataToSave = {
+                    ...data,
+                    timestamp: serverTimestamp(), // Gunakan server timestamp Firestore
+                    userId: userId,
+                    appId: appId
+                };
+                
+                // Gunakan addDoc untuk membuat dokumen baru dengan ID yang dibuat otomatis
+                await addDoc(colRef, dataToSave);
+
+                saveStatusElement.className = 'mt-4 text-center text-sm font-medium text-green-600';
+                saveStatusElement.textContent = '✅ Hasil berhasil disimpan di Firestore!';
+
+            } catch (error) {
+                console.error("[Firestore] Failed to save results:", error);
+                saveStatusElement.className = 'mt-4 text-center text-sm font-medium text-red-500';
+                saveStatusElement.textContent = `❌ Gagal menyimpan data: ${error.message}`;
+            }
         }
 
         // PERHITUNGAN HASIL (INTI LOGIKA)
@@ -571,13 +742,33 @@
                 `;
             }
 
+            // Prepare data structure to save
+            const dataToSave = {
+                respondentInfo: {
+                    name: answers.name,
+                    email: answers.email,
+                    gender: answers.gender,
+                    city: answers.city,
+                    age: answers.age,
+                    job: answers.job,
+                },
+                rawAnswers: answers,
+                tcmScores: finalResults.map(r => ({ id: r.id, score: r.finalScore }))
+            };
+
+            // Call save function (non-blocking)
+            saveResultsToFirestore(dataToSave);
+
+
             // BUILD FINAL RESULT HTML
             let htmlResult = `
+                <div id="saveStatus" class="mt-4 text-center text-sm font-medium">Menunggu status penyimpanan...</div>
                 <div class="bg-blue-50 p-4 rounded-lg mb-4 text-sm print:hidden">
                     <strong>Informasi Responden:</strong><br>
                     Nama: ${answers.name}<br>
                     Umur: ${answers.age}<br>
-                    Pekerjaan: ${answers.job}
+                    Pekerjaan: ${answers.job}<br>
+                    Kota: ${answers.city}
                 </div>
                 <table class="w-full text-left border-collapse mb-8">
                     <thead>
@@ -592,17 +783,25 @@
                     </tbody>
                 </table>
                 
-                <div class="mt-4 text-center print:hidden">
+                <!-- Tombol dan Output AI -->
+                <div class="mt-4 flex flex-col md:flex-row justify-center gap-4 print:hidden">
                     <button id="generateRecBtn" onclick="generateRecommendation()" 
-                            class="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-lg text-white bg-green-600 hover:bg-green-700 transition duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="flex-1 inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-lg text-white bg-green-600 hover:bg-green-700 transition duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed">
                         Dapatkan Rekomendasi Kesehatan AI ✨
                     </button>
+                    <button id="generatePlanBtn" onclick="generateWeeklyPlan()" 
+                            class="flex-1 inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-lg text-white bg-blue-600 hover:bg-blue-700 transition duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed">
+                        Dapatkan Rencana Wellness Mingguan ✨
+                    </button>
                 </div>
-                
-                <!-- Output area for AI recommendation -->
+
+                <!-- Output area for AI recommendation (Feature 1) -->
                 <div id="recommendationOutput" class="mt-6">
                     <p class="text-sm text-gray-500 text-center italic print:hidden">Klik tombol di atas untuk mendapatkan saran gaya hidup, diet, dan herbal dari Gemini AI berdasarkan hasil diagnosis TCM Anda.</p>
                 </div>
+
+                <!-- Output area for Weekly Plan (Feature 2) -->
+                <div id="weeklyPlanOutput" class="mt-6"></div>
 
                 <div class="mt-8 text-xs text-gray-500 bg-gray-100 p-3 rounded print:hidden">
                     <strong>Catatan Cara Baca Skor:</strong><br>
@@ -615,7 +814,7 @@
                     <p>
                         Dibuat oleh Tim Dosen dan Asisten<br>
                         Credited to:<br>
-                        Created by : Jolanda Sakul ( NIM  : 20230302120523 )
+                        Created by : Jolanda Sakul ( NIM  : 20230302120523 )<br>
                         Penerjemah & penyadur TCMC : dr Willie Japaries, MARS<br>
                         Supported by: JAEN
                     </p>
@@ -624,6 +823,14 @@
 
             document.getElementById('resultContent').innerHTML = htmlResult;
         }
+
+        // Ekspos fungsi ke window scope agar bisa dipanggil dari HTML
+        window.saveDemo = saveDemo;
+        window.saveAnswer = saveAnswer;
+        window.prevStep = prevStep;
+        window.nextStep = nextStep;
+        window.generateRecommendation = generateRecommendation;
+        window.generateWeeklyPlan = generateWeeklyPlan;
     </script>
 </body>
 </html>
